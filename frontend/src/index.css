@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-cream text-ink font-body text-[17px] leading-relaxed;
+  }
+  h1, h2, h3, h4 {
+    @apply font-display text-ink;
+  }
+  :focus-visible {
+    outline: 3px solid theme('colors.amber.400');
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-base font-semibold transition-all duration-200 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
+  }
+  .btn-primary {
+    @apply btn bg-pine-500 text-white hover:bg-pine-600 hover:shadow-md hover:-translate-y-0.5;
+  }
+  .btn-secondary {
+    @apply btn bg-white text-pine-600 border-2 border-pine-500 hover:bg-pine-50 hover:-translate-y-0.5;
+  }
+  .btn-amber {
+    @apply btn bg-amber-400 text-pine-700 hover:bg-amber-500 hover:shadow-md hover:-translate-y-0.5;
+  }
+  .btn-danger {
+    @apply btn bg-white text-clay border-2 border-clay hover:bg-clay hover:text-white;
+  }
+  .card {
+    @apply bg-white rounded-xl2 shadow-sm border border-pine-100 p-6 transition-shadow duration-200;
+  }
+  .card-hover {
+    @apply hover:shadow-lg hover:-translate-y-1 transition-all duration-300;
+  }
+  .input {
+    @apply w-full rounded-lg border-2 border-pine-100 px-4 py-3 text-base text-ink placeholder:text-muted transition-colors focus:border-pine-500 focus:outline-none;
+  }
+  .label {
+    @apply block text-sm font-semibold text-pine-700 mb-1;
+  }
+  .badge {
+    @apply inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold transition-colors;
+  }
+}
+
+@layer utilities {
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes banner-in {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes soft-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
+  .animate-fade-up {
+    animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-fade-in {
+    animation: fade-in 0.5s ease-out both;
+  }
+  .animate-scale-in {
+    animation: scale-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-banner-in {
+    animation: banner-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-soft-pulse {
+    animation: soft-pulse 2s ease-in-out infinite;
+  }
+  .delay-1 { animation-delay: 0.08s; }
+  .delay-2 { animation-delay: 0.16s; }
+  .delay-3 { animation-delay: 0.24s; }
+  .delay-4 { animation-delay: 0.32s; }
+}
