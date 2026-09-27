@@ -28,7 +28,16 @@ export function formatCurrency(amount) {
 
 export function formatDateTime(value) {
   if (!value) return '—';
-  const d = new Date(value);
+  // Timestamps are stored as naive UTC strings ("YYYY-MM-DD HH:MM:SS", no
+  // timezone marker), so a browser parses that shape as *local* time by
+  // default instead of UTC — silently showing every date/time offset by
+  // the viewer's own UTC offset. Rewriting it into a proper ISO string
+  // with an explicit "Z" forces correct UTC parsing before converting to
+  // the viewer's local time for display.
+  const isoish = typeof value === 'string' && value.includes(' ') && !value.includes('T')
+    ? value.replace(' ', 'T') + 'Z'
+    : value;
+  const d = new Date(isoish);
   if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
 }
