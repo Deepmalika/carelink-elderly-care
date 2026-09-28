@@ -1,13 +1,38 @@
 # CareLink — Elderly Nursing & Healthcare Assistance Platform
 
-A full-stack implementation of the PRD: a web portal connecting senior citizens and their
-families with verified healthcare professionals (nurses, elderly attendants, physiotherapists,
-and post-hospital care specialists) for in-home medical and non-medical assistance.
+A full-stack web platform connecting senior citizens and their families with verified healthcare
+professionals (nurses, elderly attendants, physiotherapists, and post-hospital care specialists)
+for in-home medical and non-medical assistance.
 
-Built with three roles, exactly as specified in the PRD:
+It supports three roles:
 - **Family / Elderly users** — create patient profiles, browse services, book verified caregivers, track visits, rate completed care
 - **Caregivers (Service Agents)** — manage their profile & availability, accept/reject requests, update visit status, add care notes, view earnings & history
-- **Admins** — verify/onboard caregivers, manage the service catalog, view users, and monitor platform KPIs
+- **Admins** — verify/onboard caregivers, manage the service catalog, view users, monitor platform KPIs, and moderate reviews and care notes
+
+## Live demo
+
+**https://carelink-elderly-care.vercel.app/**
+
+Log in with any of the demo accounts below to explore each role:
+
+| Role      | Email                          | Password      |
+|-----------|---------------------------------|--------------|
+| Family    | kavita.family@carelink.com       | family123    |
+| Caregiver | anita.caregiver@carelink.com     | caregiver123 |
+| Admin     | admin@carelink.com               | admin123     |
+
+Worth trying: as **family**, describe a situation on the triage page and book a recommended
+caregiver; as **caregiver**, accept a request and add a care note; as **admin**, check the
+KPI dashboard, the sentiment-flagged items, and the moderation page.
+
+A few things to know:
+- **The first load can take up to a minute.** The backend and ML service run on free-tier
+  hosting that sleeps when idle, so the first request after a quiet period has to wake them.
+  After that it's fast.
+- **Please use the demo accounts rather than registering with real personal details.**
+  These are shared, public logins on a demo database, and the admin account can see every
+  registered user's name, email, and phone number.
+- **Demo data is disposable** and may be reset at any time.
 
 ## Stack
 
@@ -15,9 +40,10 @@ Built with three roles, exactly as specified in the PRD:
 |-----------|------------|
 | Frontend  | React (Vite) + React Router + Tailwind CSS + Axios |
 | Backend   | Node.js + Express (REST API) |
-| Database  | PostgreSQL (via `pg`) — a free-tier Supabase project works well |
+| Database  | PostgreSQL (via `pg`), hosted on Supabase |
 | Auth      | JWT (JSON Web Tokens), bcrypt password hashing |
-| ML service | Python + FastAPI + scikit-learn (care-need triage classifier) |
+| ML service | Python + FastAPI + scikit-learn (triage, sentiment, and recommendation models) |
+| Hosting   | Vercel (frontend), Render (backend + ML service), Supabase (database) |
 
 **A note on the database:** this started on SQLite (via `better-sqlite3`) for zero-setup local
 development, then migrated to PostgreSQL for deployment — SQLite's single-file database doesn't
@@ -43,7 +69,15 @@ years of experience. Falls back to the plain unranked list if the ML service is 
 **3. Sentiment analysis on reviews & care notes** — every rating comment and care note is
 automatically scored (Positive / Negative / Neutral) by a trained classifier the moment it's
 submitted. Negative-sentiment items surface on a dedicated admin page (`/admin/sentiment`)
-so concerning feedback gets noticed even when a star rating alone wouldn't flag it.
+so concerning feedback gets noticed even when a star rating alone wouldn't flag it. Admins
+can also browse every review and care note (`/admin/moderation`) and remove any of them, and
+families can delete their own reviews.
+
+**A note on scope:** the models are trained on small, hand-curated datasets (roughly 100
+examples per model), so this is a working proof of concept rather than a production-grade
+classifier — it can misjudge unusual phrasing. The app is built so that never blocks anything:
+if the ML service is down or unsure, triage shows a friendly message, recommendations fall
+back to an unranked list, and reviews save without a sentiment tag.
 
 See `ml-service/README.md` for details on all three models and how to retrain them. None of
 this is a medical diagnosis tool — it's routing/matching/monitoring assistance only.
@@ -51,30 +85,34 @@ this is a medical diagnosis tool — it's routing/matching/monitoring assistance
 ## Project structure
 
 ```
-project/
+carelink-elderly-care-platform/
+├── .github/workflows/
+│   └── keep-alive.yml          # scheduled ping so the free-tier database doesn't pause
 ├── ml-service/
-│   ├── data/training_data.py   # curated training examples per category
-│   ├── model/                   # trained model saved here after `python train.py`
-│   ├── train.py
-│   ├── app.py                   # FastAPI app exposing POST /predict
+│   ├── data/                    # training examples (triage + sentiment)
+│   ├── model/                   # trained models saved here after training
+│   ├── train.py                 # trains the triage classifier
+│   ├── train_sentiment.py       # trains the sentiment classifier
+│   ├── app.py                   # FastAPI app: /predict, /analyze-sentiment, /recommend-caregivers
 │   └── requirements.txt
 ├── backend/
 │   ├── src/
 │   │   ├── db/            # schema.sql, connection, seed script, inspect script
 │   │   ├── middleware/     # JWT auth + role guards
 │   │   ├── routes/         # auth, patients, services, caregivers, bookings, admin, triage
+│   │   ├── utils/          # id generation, password hashing, ML service client
 │   │   └── server.js
 │   └── package.json
 └── frontend/
     ├── src/
     │   ├── pages/           # Landing, Login, Register, Services, Triage, BookingDetail, family/, caregiver/, admin/
-    │   ├── components/      # Navbar, ProtectedRoute, StatusBadge, Spinner, Feedback
+    │   ├── components/      # Navbar, ProtectedRoute, StatusBadge, SentimentBadge, Spinner, Feedback
     │   ├── context/          # AuthContext
     │   └── lib/               # api client, formatting helpers
     └── package.json
 ```
 
-## Getting started
+## Getting started (running locally)
 
 You'll run three things, each in its own terminal: the ML service, the backend, and the frontend.
 
@@ -82,11 +120,17 @@ You'll run three things, each in its own terminal: the ML service, the backend, 
 
 ```bash
 cd ml-service
-python3 -m venv venv && source venv/bin/activate   # optional but recommended
+python -m venv venv
+source venv/bin/activate          # on Windows: venv\Scripts\activate
 pip install -r requirements.txt
-python train.py                                     # trains and saves the model (only needed once)
+python train.py                   # trains the triage model
+python train_sentiment.py         # trains the sentiment model
 uvicorn app:app --host 0.0.0.0 --port 8001 --reload
 ```
+
+The trained models are saved to `ml-service/model/`. If you edit anything in `data/`, re-run
+the matching training script and restart the service — `--reload` only watches code, not the
+saved model files.
 
 ### 2. Backend
 
@@ -106,14 +150,14 @@ get a Supabase connection string):
 
 ```
 DATABASE_URL="postgresql://user:password@host:5432/dbname"
-JWT_SECRET="elderly-care-dev-secret-change-in-production"
+JWT_SECRET="change-me-to-a-long-random-string"
 PORT=4000
 ML_SERVICE_URL="http://localhost:8001"
 ```
 
 ### 3. Frontend
 
-In a second terminal:
+In another terminal:
 
 ```bash
 cd frontend
@@ -131,17 +175,14 @@ Open **http://localhost:5173** in your browser.
 
 ### Demo accounts (created by `npm run seed`)
 
-| Role      | Email                          | Password      |
-|-----------|---------------------------------|--------------|
-| Admin     | admin@carelink.com               | admin123     |
-| Family    | kavita.family@carelink.com       | family123    |
-| Caregiver (verified) | anita.caregiver@carelink.com | caregiver123 |
-| Caregiver (pending)  | suresh.caregiver@carelink.com | caregiver123 |
+`npm run seed` creates the same demo accounts listed in [Live demo](#live-demo), plus a
+second caregiver, `suresh.caregiver@carelink.com` / `caregiver123`, whose profile is
+**unverified** so the admin verification queue has something to show. The demo family account
+already has one patient profile (Mohan Rao) so you can try the booking flow immediately.
 
-The demo family account already has one patient profile (Mohan Rao) so you can immediately try
-the booking flow. The unverified caregiver (Suresh) is there so you can try the admin
-verification queue. These credentials are shown in the app itself only in dev mode (`Login.jsx`
-gates the box behind `import.meta.env.DEV`) — they're stripped out of the production build.
+When running locally with `npm run dev`, the login page also displays these accounts in a
+box (`Login.jsx` gates it behind `import.meta.env.DEV`, so it's stripped out of production
+builds).
 
 ### Looking at the database directly
 
@@ -152,33 +193,42 @@ gates the box behind `import.meta.env.DEV`) — they're stripped out of the prod
 - **Any Postgres client**: TablePlus, pgAdmin, DBeaver, or the `psql` CLI all work with the
   same `DATABASE_URL` connection string.
 
-## What's implemented (mapped to the PRD)
+## Features
 
-**Functional requirements**
-- User (family/elderly) features: registration & login, patient profile creation, browsing
-  services, booking a caregiver, viewing service/booking history
-- Service agent (caregiver) features: registration & verification, managing availability/service
-  areas, accepting/rejecting requests, updating status & care notes, viewing earnings/work history
-- Admin features: verifying/onboarding caregivers, managing services, viewing users, viewing
-  analytics/KPIs, (dispute handling is left as a future enhancement — see below)
+**Family / elderly users**
+- Registration & login, patient profile creation
+- Browse services and book a verified caregiver, with AI triage and caregiver recommendations
+- View booking history, add care notes, rate completed visits, and delete their own reviews
 
-**Non-functional requirements**
-- Security: JWT auth, bcrypt-hashed passwords, role-based route guards on both API and frontend
-- Usability: large, high-contrast, plain-language UI aimed at being easy for families (and less
-  tech-savvy users) to navigate
-- Scalability: stateless REST API backed by a managed Postgres database (Supabase), so the
+**Caregivers**
+- Registration, profile management, and verification by an admin
+- Manage availability and service areas
+- Accept or reject requests, update visit status, add care notes
+- View earnings and work history
+
+**Admins**
+- Verify and onboard caregivers, manage the service catalog, view users
+- KPI dashboard (`GET /api/admin/analytics`): registered users, verified caregivers, booking
+  completion rate, average caregiver response time, satisfaction score (from ratings), and
+  monthly active users
+- Review sentiment-flagged feedback and moderate every review and care note
+
+**Engineering highlights**
+- **Security:** JWT auth, bcrypt-hashed passwords, role-based route guards on both API and
+  frontend, and server-side ownership checks (e.g. a family member can only delete their own
+  review)
+- **Usability:** large, high-contrast, plain-language UI aimed at being easy for families (and
+  less tech-savvy users) to navigate
+- **Scalability:** stateless REST API backed by a managed Postgres database (Supabase), so the
   backend itself can be scaled horizontally without any local-file state to worry about
+- **Resilience:** the ML service is optional at runtime — every feature that uses it degrades
+  gracefully instead of failing when it's unavailable
 
-**Data model**: Users, Patients, Caregivers, Services, Bookings, Care Notes — matching the PRD's
-"Core Entities" list exactly.
+**Data model:** Users, Patients, Caregivers, Services, Bookings, and Care Notes.
 
-**KPIs** (`GET /api/admin/analytics`): registered users, verified caregivers, booking completion
-rate, average caregiver response time, satisfaction score (from ratings), monthly active users.
-
-**Out of scope for this build** (as called out in the PRD's own "Out of Scope" section): native
-mobile apps, direct hospital system integration, and emergency ambulance services. Online
-payments, tele-consultation, medication reminders, and an SOS feature are listed in the PRD as
-*future enhancements* and are likewise not built here.
+**Not included (possible future work):** native mobile apps, direct hospital system
+integration, emergency ambulance services, dispute handling, online payments,
+tele-consultation, medication reminders, and an SOS feature.
 
 ## API overview
 
@@ -190,39 +240,44 @@ All endpoints are prefixed with `/api`. Protected endpoints require `Authorizati
 - `GET /caregivers/recommend?patientId=...&category=...` — family only; ranks verified caregivers for a specific patient using the ML recommendation engine
 - `POST /patients`, `GET /patients/mine`, `GET/PUT /patients/:id`
 - `POST /bookings`, `GET /bookings/mine`, `GET /bookings/:id`, `PATCH /bookings/:id/accept|reject|status|rate`
-- `POST/GET /bookings/:id/notes`
+- `DELETE /bookings/:id/review` — the review's author (family) or an admin
+- `POST/GET /bookings/:id/notes`, `DELETE /bookings/:id/notes/:noteId` — the note's author or an admin
 - `GET /admin/users`, `GET /admin/caregivers`, `GET /admin/caregivers/pending`, `GET /admin/analytics`
 - `GET /admin/sentiment-flags` — negative-sentiment ratings and care notes for review
+- `GET /admin/reviews`, `GET /admin/care-notes` — every review and care note, for moderation
 - `POST /triage` — public; body `{ "description": "..." }`, proxies to the ML service and returns
   a suggested category plus matching services (returns a 503 with a friendly message if the ML
   service isn't running)
 
-## Deploying
+## Deployment
 
-**1. Database (Supabase, free tier):**
-- Create a project at [supabase.com](https://supabase.com).
-- Go to Project Settings → Database → Connection string → copy the URI (use the "Session
-  pooler" connection string if your host doesn't support long-lived direct connections).
-- Set that as `DATABASE_URL` in the backend's environment. The schema and any missing
-  columns are created automatically on first run (`db.init()` in `server.js`) — no manual
-  migration step needed.
+The live demo runs on free tiers of three services:
 
-**2. ML service**: any Python host (Render, Railway, Fly.io). Commit the trained
-  `ml-service/model/*.joblib` files, or add a build step that runs `python train.py &&
-  python train_sentiment.py` before starting. Start command: `uvicorn app:app --host 0.0.0.0
-  --port $PORT`.
+| Piece | Host | Notes |
+|-------|------|-------|
+| Database | Supabase (Postgres) | Schema is created automatically on first backend start (`db.init()`) |
+| ML service | Render (web service) | Root directory `ml-service`; build `pip install -r requirements.txt && python train.py && python train_sentiment.py`; start `uvicorn app:app --host 0.0.0.0 --port $PORT` |
+| Backend | Render (web service) | Root directory `backend`; build `npm install`; start `npm run start` |
+| Frontend | Vercel | Root directory `frontend`; framework preset Vite |
 
-**3. Backend**: any Node host (Render, Railway, a VPS, etc.).
-  - `DATABASE_URL` — your Supabase connection string from step 1
-  - `JWT_SECRET` — generate a real random secret, don't reuse the dev default
-  - `ML_SERVICE_URL` — your deployed ML service's URL from step 2
-  - `FRONTEND_URL` — your deployed frontend's URL (locks down CORS to just that origin)
-  - Start command: `npm run start` (not `dev`)
-  - Run `npm run seed` once via the host's shell/console if starting from an empty database
+**Backend environment variables:**
+- `DATABASE_URL` — the Supabase connection string
+- `JWT_SECRET` — a long random secret (generate one with
+  `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
+- `ML_SERVICE_URL` — the deployed ML service's URL
+- `FRONTEND_URL` — the deployed frontend's URL; locks CORS down to just that origin
 
-**4. Frontend**: `npm run build` produces `frontend/dist` — deploy as a static site (Vercel,
-  Netlify, S3+CloudFront, etc.) and set `VITE_API_URL` to your deployed backend's URL.
+**Frontend environment variable:** `VITE_API_URL` — the deployed backend's URL plus `/api`.
 
-**Before going live:** change the seeded demo passwords (`admin123`, `family123`,
-`caregiver123`) if this database will be seeded anywhere public — they're printed in this
-README and in `seed.js`, so treat them as compromised by default.
+**Gotchas worth knowing:**
+- **No trailing slashes** in `FRONTEND_URL` or `ML_SERVICE_URL`. CORS compares the origin as an
+  exact string, so `https://example.com/` does not match `https://example.com`.
+- **Free-tier services sleep when idle.** Render's free web services spin down after about 15
+  minutes without traffic and take up to a minute to wake, which is why the first request after
+  a quiet period is slow. Supabase's free tier pauses a project after about a week of
+  inactivity, so `.github/workflows/keep-alive.yml` calls a database-backed backend route twice
+  a week to keep it active.
+- **Demo credentials are hidden in production builds.** The dev-only credentials box on the
+  login page is removed by Vite at build time, not just hidden with CSS.
+- **The demo accounts are public on purpose** (see [Live demo](#live-demo)) so visitors can
+  try every role. Don't put real personal data in the database behind a public demo.
